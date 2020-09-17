@@ -1,0 +1,2 @@
+122
+Child process status: 0

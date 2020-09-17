@@ -1,8 +1,10 @@
 #include "mumsh.h"
 
 int main(){
+    // printf("mumsh $ ");
     while(1){
-        printf("mumsh $ ");
+        // printf("mumsh $ ");
+        prompt("mumsh $ ");
         /**
          * initialization     
          */
@@ -13,10 +15,12 @@ int main(){
         char *outFileName = (char *)malloc(sizeof(char)*FILENAME_MAX);
         char *line = (char *)malloc(sizeof(char)*MAX_LINE);
         if (fgets(line, MAX_LINE, stdin) == NULL){
-            printf("Error: fgets crashed.\n");
+            // printf("Error: fgets crashed.\n");
             free(line);
-            exit(1);
+            // exit(1);
+            continue;
         }
+        // printf("]]][[[LINE: ");
         // for(int i=0;i<(int)strlen(line);i++)printf("%d ",line[i]);
         // printf("\n");
         char **parm = (char **)malloc(sizeof(char *)*MAX_LINE);
@@ -112,12 +116,12 @@ int main(){
                 close(desIn);
             }
             if(isOutRed){
-                desOut = open(outFileName, O_WRONLY | O_CREAT | O_TRUNC);
+                desOut = open(outFileName, O_WRONLY | O_CREAT | O_TRUNC, S_IRWXU);
                 dup2(desOut, 1); // replace stdout(1) with desOut
                 close(desOut);
             }
             if(isOutApp){
-                desOut = open(outFileName, O_WRONLY | O_CREAT | O_APPEND);
+                desOut = open(outFileName, O_WRONLY | O_CREAT | O_APPEND, S_IRWXU);
                 dup2(desOut, 1);
                 close(desOut);
             }
@@ -136,8 +140,13 @@ int main(){
                     printf("Error: execvp not working.\n");
                     exit(0);
                 }
+                else{
+                    // printf("mumsh $ ");
+                    exit(0);
+                }
             }
             else{ // executed by parnet process
+                // printf("mumsh $ ");
                 /* wait for child process */
                 pid_t tmpPid;
                 do{

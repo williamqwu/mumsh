@@ -1,7 +1,0 @@
-123
-Child process status: 0
-mumsh $ 
-Error: execvp not working.
-Child process status: 0
-mumsh $ 
-exit

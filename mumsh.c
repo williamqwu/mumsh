@@ -23,15 +23,36 @@ int main(){
         // printf("]]][[[LINE: ");
         // for(int i=0;i<(int)strlen(line);i++)printf("%d ",line[i]);
         // printf("\n");
+        /**
+         * pre-processing LINE     
+         */
+        char *tmpLine = (char *)malloc(sizeof(char)*MAX_LINE*2);
+        memset(tmpLine,0,MAX_LINE*2);
+        for(unsigned int i=0,j=0;i<strlen(line);){
+            if(line[i]!='<' && line[i]!='>') tmpLine[j++]=line[i++];
+            else{
+                tmpLine[j++]=' ';
+                tmpLine[j++]=line[i++];
+                if(i<strlen(line)&&line[i]=='>') tmpLine[j++]=line[i++];
+                if(i<strlen(line)&&line[i]!=' ') tmpLine[j++]=' ';
+            }
+        }
+        free(line);
+
         char **parm = (char **)malloc(sizeof(char *)*MAX_LINE);
         for(int i=0;i<MAX_LINE;i++) parm[i]=NULL; // init the parameter array
         int parmCnt = 0;
         char *token;
 
-        token = strtok(line, PARM_DELIM);
+        token = strtok(tmpLine, PARM_DELIM);
         while (token != NULL){
             // for(int i=0;i<(int)strlen(token);i++)printf("%d ",token[i]);
             // printf("||%d\n",parmCnt);
+            /**
+             * check for redirection     
+             */
+
+            // original redirection
             if (token[0]=='>'){
                 if(strlen(token)>1 && token[1]=='>'){
                     isOutApp=1;
@@ -101,7 +122,7 @@ int main(){
 
         if (!strcmp(parm[0],"exit")){
             printf("exit\n");
-            free(line);
+            free(tmpLine);
             for(int i=0;i<parmCnt;i++) free(parm[i]);
             free(parm);
             exit(0);
@@ -162,7 +183,9 @@ int main(){
         dup2(stdIn, 0);
         dup2(stdOut, 1);
 
-        free(line);
+        free(inFileName);
+        free(outFileName);
+        free(tmpLine);
         for(int i=0;i<parmCnt;i++) free(parm[i]);
         free(parm);
 

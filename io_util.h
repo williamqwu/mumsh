@@ -5,10 +5,14 @@
 #define MAX_FILENAME 256 // maxima length of the file name (255)
 #define PARM_DELIM " \t\n" // delim used for input parsing
 
+#include "mumsh.h"
+
 void prompt(const char *message);
 
-// void errMsg(const char *message);
+void errMsg(const char *message);
 
-// void stdoutMsg(const char *message);
+void stdoutMsg(const char *message);
+
+void debugMsg(const char *message);
 
 #endif // IO_UTIL_H

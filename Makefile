@@ -1,8 +1,8 @@
 CC = clang
 CFLAGS = -std=gnu11 -O2 -Wall -Wextra -Werror -pedantic -Wno-unused-result
-MUMSH_SRC = mumsh.c io_util.c
-MUMSH_HEADER = mumsh.h io_util.h
-TEST_SRC = mumsh.c io_util.c
+MUMSH_SRC = mumsh.c io_util.c global.c
+MUMSH_HEADER = mumsh.h io_util.h global.h
+TEST_SRC = mumsh.c io_util.c global.c
 TEST = test
 MUMSH = mumsh
 MUMSHMC_FLAGS = -fsanitize=address -fno-omit-frame-pointer -fsanitize=undefined -fsanitize=integer
@@ -26,7 +26,7 @@ clean:
 
 test: clean
 	@echo \>\>\> generating testing program...
-	@$(CC) $(CFLAGS) -o $(TEST) $(TEST_SRC)
+	@$(CC) $(CFLAGS) -o $(TEST) $(TEST_SRC) -D DEBUG
 	@echo \>\>\> test successfully constructed, automatically running: 
 	@./test
 	@echo \>\>\> exiting test...

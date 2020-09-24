@@ -1,6 +1,7 @@
 CC = clang
 CFLAGS = -std=gnu11 -O2 -Wall -Wextra -Werror -pedantic -Wno-unused-result
 MUMSH_SRC = mumsh.c io_util.c
+MUMSH_HEADER = mumsh.h io_util.h
 TEST_SRC = mumsh.c io_util.c
 TEST = test
 MUMSH = mumsh
@@ -24,7 +25,10 @@ clean:
 	$(RM) *.o *.a *~ $(MUMSH) $(MUMSHMC) $(TEST)
 
 test: clean
-	@echo generating testing program...
+	@echo \>\>\> generating testing program...
 	@$(CC) $(CFLAGS) -o $(TEST) $(TEST_SRC)
-	@echo test successfully constructed, automatically running: 
+	@echo \>\>\> test successfully constructed, automatically running: 
 	@./test
+	@echo \>\>\> exiting test...
+	@echo \>\>\> generating archive file...
+	@tar -cf p1.tar $(MUMSH_SRC) $(MUMSH_HEADER) Makefile README.md

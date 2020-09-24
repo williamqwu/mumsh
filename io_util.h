@@ -7,4 +7,8 @@
 
 void prompt(const char *message);
 
+// void errMsg(const char *message);
+
+// void stdoutMsg(const char *message);
+
 #endif // IO_UTIL_H

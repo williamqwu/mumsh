@@ -15,13 +15,27 @@ int main(){
          * @line: original line of commands
          */
         if (fgets(line, MAX_LINE, stdin) == NULL){
-            debugMsg("Error: fgets not receiving anything.\n");
+            debugMsg("Info: fgets reaching EOF.\n");
+            stdoutMsg("exit\n");
             free(line);
             promptExit();
-            // exit(1);
-            continue;
+            exit(0);
+            // continue;
         }
         /** Parsing line
+         *
+         */
+        int isEmptyLine=1;
+        for(unsigned int i=0;i<strlen(line);i++){
+            if(line[i]!=32 && line[i]!=10) isEmptyLine=0;
+        }
+        if(isEmptyLine){
+            debugMsg("Empty line.\n");
+            free(line);
+            promptExit();
+            continue;
+        }
+        /** Parsing redirection
          * @Sline: line with keywords >, <, >> separated by space
          */
         char *sLine = (char *)malloc(sizeof(char)*MAX_LINE*2);
@@ -36,6 +50,7 @@ int main(){
             }
         }
         free(line);
+        // TODO: check whether there is only blank characters in the line (?)
         // TODO: check whether the pipe is valid, error handling here.
 
         /** Tokenize the line; parsing redirection symbols

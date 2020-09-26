@@ -6,6 +6,7 @@
 #include <string.h>
 #include <fcntl.h>      // file control options
 #include <unistd.h>     // UNIX Standard
+#include <signal.h>     // signal handling
 #include <sys/types.h>  // pid_t
 #include <sys/wait.h>   
 #include <sys/stat.h>

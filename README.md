@@ -9,3 +9,4 @@ Status: milestone-2
 | keyword | \# task | description |
 | ------- | ------- | ----------- |
 | exit    | 1       | exit memsh  |
+| pwd     | 7       | display current directory  |

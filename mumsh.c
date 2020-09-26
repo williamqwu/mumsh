@@ -4,7 +4,7 @@ int main(){
     while(1){
         prompt("mumsh $ ");
         /** Initialization
-         * isInRed, isOutRed, isOutApp: redirection status
+         * @isInRed, isOutRed, isOutApp: redirection status
          */
         int isInRed=0, isOutRed=0, isOutApp=0; // redirection status
         int desIn, desOut; // file descriptor
@@ -145,7 +145,7 @@ int main(){
             }
         }
         int cmdCnt = pipeCnt + 1; // number of commands in the line
-        cmdHeadDict[cmdCnt] = mArgc; // for the purpose of calculating offset
+        cmdHeadDict[cmdCnt] = mArgc + 1; // for the purpose of calculating offset
 
         /** Creating pipe
          * @pipeFd: file descriptor for read/write ends of pipes
@@ -163,6 +163,7 @@ int main(){
         int childStatus;
         for(int index=0;index<cmdCnt;index++){
             int cmdHead = cmdHeadDict[index];
+            int cmdOffset = cmdHeadDict[index+1] - cmdHead - 1;
             /* checking exit */
             if(!strcmp(mArgv[cmdHead],"exit")){
                 stdoutMsg("exit\n");
@@ -173,7 +174,22 @@ int main(){
                 exit(0);
             }
             /* checking build-in*/
-            // TODO: build-in here
+            if(!strcmp(mArgv[cmdHead],"cd")){ // FIXME: pipe, location, syntax
+                // const char *dir = "~";
+                if(cmdOffset==1){
+                    if(chdir("/.") < 0){
+                        errMsg("Error: cd ~ not working.\n");
+                    }
+                }
+                else{
+                    // TO-CHECK: do we need to support arguments? more than one?
+                    if(chdir(mArgv[cmdHead+1]) < 0){
+                        errMsg("Error: cd not working.\n");
+                    }
+                    // printf("%s\n",mArgv[cmdHead+1]);fflush(stdout);
+                }
+                continue;
+            }
             /* forking */
             pid_t pid = fork();
             
@@ -215,6 +231,20 @@ int main(){
                 for(int i=0;i<2*pipeCnt;i++){
                     close(pipeFd[i]);
                 }
+                /* running build-in */
+                if(!strcmp(mArgv[cmdHead],"pwd")){
+                    char cwd[MAX_PATH];
+                    if(getcwd(cwd, sizeof(cwd)) != NULL){
+                        debugMsg("Info: pwd working.\n");
+                        stdoutMsg(cwd);
+                        stdoutMsg("\n");
+                    }
+                    else{
+                        errMsg("Error: pwd not working.\n");
+                    }
+                    exit(0);
+                }
+                
                 /* running bash command */
                 if(execvp(mArgv[cmdHead], mArgv+cmdHead) < 0){
                     errMsg("Error: execvp not working.\n");

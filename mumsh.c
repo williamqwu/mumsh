@@ -3,237 +3,236 @@
 int main(){
     while(1){
         prompt("mumsh $ ");
-        /**
-         * initialization     
+        /** Initialization
+         * isInRed, isOutRed, isOutApp: redirection status
          */
         int isInRed=0, isOutRed=0, isOutApp=0; // redirection status
         int desIn, desOut; // file descriptor
-        int pipedCnt = 1;
         int pipedInitAddr[MAX_PIPED];
         memset(pipedInitAddr,0,MAX_PIPED);
         promptInit();
-
+        /** Input
+         * @line: original line of commands
+         */
         if (fgets(line, MAX_LINE, stdin) == NULL){
-            debugMsg("Error: fgets crashed.\n");
+            debugMsg("Error: fgets not receiving anything.\n");
             free(line);
             promptExit();
             // exit(1);
             continue;
         }
-        /**
-         * pre-processing LINE     
+        /** Parsing line
+         * @Sline: line with keywords >, <, >> separated by space
          */
-        char *tmpLine = (char *)malloc(sizeof(char)*MAX_LINE*2);
-        memset(tmpLine,0,MAX_LINE*2);
+        char *sLine = (char *)malloc(sizeof(char)*MAX_LINE*2);
+        memset(sLine,0,MAX_LINE*2);
         for(unsigned int i=0,j=0;i<strlen(line);){
-            if(line[i]!='<' && line[i]!='>') tmpLine[j++]=line[i++];
+            if(line[i]!='<' && line[i]!='>') sLine[j++]=line[i++];
             else{
-                tmpLine[j++]=' ';
-                tmpLine[j++]=line[i++];
-                if(i<strlen(line)&&line[i]=='>') tmpLine[j++]=line[i++];
-                if(i<strlen(line)&&line[i]!=' ') tmpLine[j++]=' ';
+                sLine[j++]=' ';
+                sLine[j++]=line[i++];
+                if(i<strlen(line)&&line[i]=='>') sLine[j++]=line[i++];
+                if(i<strlen(line)&&line[i]!=' ') sLine[j++]=' ';
             }
         }
         free(line);
-        /**
-         * pre-processing pipeline     
+        // TODO: check whether the pipe is valid, error handling here.
+
+        /** Tokenize the line; parsing redirection symbols
+         * @mArgv: arguments from the input line
+         * @mArgc: argument count in the input line
          */
-        // TODO: check whether the pipe is valid
-        for(unsigned int i=0;i<strlen(tmpLine);i++){
-            if(tmpLine[i]=='|'){
-                pipedInitAddr[pipedCnt]=i+1;
-                pipedCnt++;
+        char **mArgv = (char **)malloc(sizeof(char *)*MAX_LINE); // arguments from the input line
+        for(int i=0;i<MAX_LINE;i++) mArgv[i]=NULL; // init the parameter array
+        int mArgc = 0; // argument count in the input line
+        char *token;
+        token = strtok(sLine, PARM_DELIM);
+        while (token != NULL){
+            // original redirection
+            if (token[0]=='>'){
+                if(strlen(token)>1 && token[1]=='>'){
+                    isOutApp=1;
+                    if(strlen(token)==2){
+                        token = strtok(NULL, PARM_DELIM);
+                        memset(outFileName, 0, MAX_FILENAME);
+                        strcpy(outFileName, token);
+                        token = strtok(NULL, PARM_DELIM);
+                        continue;
+                    }
+                    else{
+                        memset(outFileName, 0, MAX_FILENAME);
+                        strcpy(outFileName, token);
+                        memmove(outFileName, outFileName+2, strlen(outFileName));
+                        token = strtok(NULL, PARM_DELIM);
+                        continue;
+                    }
+                }
+                else{
+                    isOutRed=1;
+                    if(strlen(token)==1){
+                        token = strtok(NULL, PARM_DELIM);
+                        memset(outFileName, 0, MAX_FILENAME);
+                        strcpy(outFileName, token);
+                        token = strtok(NULL, PARM_DELIM);
+                        continue;
+                    }
+                    else{
+                        memset(outFileName, 0, MAX_FILENAME);
+                        strcpy(outFileName, token);
+                        memmove(outFileName, outFileName+1, strlen(outFileName));
+                        token = strtok(NULL, PARM_DELIM);
+                        continue;
+                    }
+                }
+            }
+            else if (token[0]=='<'){
+                isInRed=1;
+                if(strlen(token)==1){
+                    token = strtok(NULL, PARM_DELIM); // TODO: Error: emtpy inFileName
+                    memset(inFileName, 0, MAX_FILENAME);
+                    strcpy(inFileName, token);
+                    token = strtok(NULL, PARM_DELIM);
+                    continue;
+                }
+                else{
+                    memset(inFileName, 0, MAX_FILENAME);
+                    strcpy(inFileName, token);
+                    memmove(inFileName, inFileName+1, strlen(inFileName));
+                    token = strtok(NULL, PARM_DELIM);
+                    continue;
+                }
+            }
+
+            mArgv[mArgc] = (char *)malloc(sizeof(char)*(strlen(token)+1));
+            memset(mArgv[mArgc], 0, strlen(token)+1); // init parameter
+            strcpy(mArgv[mArgc], token);
+            mArgc++;
+            token = strtok(NULL, PARM_DELIM);
+        }
+        if(isInRed) debugMsg("inred\n");
+        if(isOutApp) debugMsg("outapp\n");
+        if(isOutRed) debugMsg("outred\n");
+
+        /** Parsing pipe
+         * @pipeCnt: number of pipes in the line
+         * @cmdHeadDict: location dictionary of command heads
+         * @cmdCnt: number of commands in the line
+         */
+        int pipeCnt=0; // number of pipes in the line
+        int cmdHeadDict[MAX_PIPED]; // location dictionary of command heads
+        cmdHeadDict[0]=0;
+        for(int i=0,j=1;i<mArgc;i++){
+            if(!strcmp(mArgv[i], "|")){
+                pipeCnt++;
+                free(mArgv[i]);
+                mArgv[i]=NULL;
+                cmdHeadDict[j++]=i+1;
             }
         }
-        /**
-         * processing pipeline     
+        int cmdCnt = pipeCnt + 1; // number of commands in the line
+        cmdHeadDict[cmdCnt] = mArgc; // for the purpose of calculating offset
+
+        /** Creating pipe
+         * @pipeFd: file descriptor for read/write ends of pipes
          */
-        for(int k=1;k<=pipedCnt;k++){
-            int pipeFd[2]; // pipe file descriptor
-            char pipeBuf;  // pipe reading buffer
-            /**
-             * extracting segmant     
-             */
-            int initAddress=pipedInitAddr[k-1], offsetAddress=pipedInitAddr[k]-pipedInitAddr[k-1]-1;
-            char *segLine = (char *)malloc(sizeof(char)*MAX_LINE*2);
-            memset(segLine,0,MAX_LINE*2);
-            strncpy(segLine,pipedCnt+initAddress,offsetAddress);
-
-            /**
-             * processing redirection     
-             */
-            char **parm = (char **)malloc(sizeof(char *)*MAX_LINE);
-            for(int i=0;i<MAX_LINE;i++) parm[i]=NULL; // init the parameter array
-            int parmCnt = 0;
-            char *token;
-            token = strtok(segLine, PARM_DELIM);
-            while (token != NULL){
-                // original redirection
-                if (token[0]=='>'){
-                    if(strlen(token)>1 && token[1]=='>'){
-                        isOutApp=1;
-                        if(strlen(token)==2){
-                            token = strtok(NULL, PARM_DELIM);
-                            memset(outFileName, 0, MAX_FILENAME);
-                            strcpy(outFileName, token);
-                            token = strtok(NULL, PARM_DELIM);
-                            continue;
-                        }
-                        else{
-                            memset(outFileName, 0, MAX_FILENAME);
-                            strcpy(outFileName, token);
-                            memmove(outFileName, outFileName+2, strlen(outFileName));
-                            token = strtok(NULL, PARM_DELIM);
-                            continue;
-                        }
-                    }
-                    else{
-                        isOutRed=1;
-                        if(strlen(token)==1){
-                            token = strtok(NULL, PARM_DELIM);
-                            memset(outFileName, 0, MAX_FILENAME);
-                            strcpy(outFileName, token);
-                            token = strtok(NULL, PARM_DELIM);
-                            continue;
-                        }
-                        else{
-                            memset(outFileName, 0, MAX_FILENAME);
-                            strcpy(outFileName, token);
-                            memmove(outFileName, outFileName+1, strlen(outFileName));
-                            token = strtok(NULL, PARM_DELIM);
-                            continue;
-                        }
-                    }
-                }
-                else if (token[0]=='<'){
-                    isInRed=1;
-                    if(strlen(token)==1){
-                        token = strtok(NULL, PARM_DELIM); // TODO: Error: emtpy inFileName
-                        memset(inFileName, 0, MAX_FILENAME);
-                        strcpy(inFileName, token);
-                        token = strtok(NULL, PARM_DELIM);
-                        continue;
-                    }
-                    else{
-                        memset(inFileName, 0, MAX_FILENAME);
-                        strcpy(inFileName, token);
-                        memmove(inFileName, inFileName+1, strlen(inFileName));
-                        token = strtok(NULL, PARM_DELIM);
-                        continue;
-                    }
-                } // TODO: clean the code
-
-                parm[parmCnt] = (char *)malloc(sizeof(char)*(strlen(token)+1));
-                memset(parm[parmCnt], 0, strlen(token)+1); // init parameter
-                strcpy(parm[parmCnt], token);
-                parmCnt++;
-                token = strtok(NULL, PARM_DELIM);
-            }
-            if(isInRed) debugMsg("inred\n");
-            if(isOutApp) debugMsg("outapp\n");
-            if(isOutRed) debugMsg("outred\n");
-            
-            if(k<pipedCnt){
-                if(pipe(pipeFd) == -1){
-                    errMsg("Error: pipe failure.\n"); // handle error
-                    exit(0);
-                }
-            }
-
-            /*
-             * exe
-             */
-            if (!strcmp(parm[0],"exit")){
-                stdoutMsg("exit\n");
-                free(tmpLine);
-                promptExit();
-                for(int i=0;i<parmCnt;i++) free(parm[i]);
-                free(parm);
+        int pipeFd[pipeCnt*2+2]; // file descriptor for read/write ends of pipes
+        for(int i=0;i<pipeCnt;i++){
+            if(pipe(pipeFd + i*2) < 0){
+                errMsg("Error: pipe failure.\n");
                 exit(0);
             }
-            else {
-                /**
-                 * redirection     
-                 */
-                if(isInRed){
-                    desIn = open(inFileName,O_RDONLY);
+        }
+        /** Executing commands
+         * @childStatus
+         */
+        int childStatus;
+        for(int index=0;index<cmdCnt;index++){
+            int cmdHead = cmdHeadDict[index];
+            /* checking exit */
+            if(!strcmp(mArgv[cmdHead],"exit")){
+                stdoutMsg("exit\n");
+                for(int i=0;i<mArgc;i++) if(mArgv[i]!=NULL) free(mArgv[i]);
+                free(mArgv);
+                free(sLine);
+                promptExit();
+                exit(0);
+            }
+            /* checking build-in*/
+            // TODO: build-in here
+            /* forking */
+            pid_t pid = fork();
+            
+            if(pid < 0){ // fork error
+                errMsg("Error: fork failed.\n");
+                exit(0);
+            }
+            else if (pid == 0){ // child process
+                /* connecting child pipeFd */
+                if(index+1 < cmdCnt){ // not the last command
+                    if(pipeCnt>0 && dup2(pipeFd[index*2+1], 1) < 0){
+                        errMsg("Error: dup2-stdout failure.\n");
+                        exit(0);
+                    }
+                }
+                if(index!=0){ // not the first command
+                    if(pipeCnt>0 && dup2(pipeFd[index*2-2], 0) < 0){
+                        errMsg("Error: pip2-stdin failure.\n");
+                        exit(0);
+                    }
+                }
+                /* checking redirection */
+                if(index==0 && isInRed){
+                    desIn = open(inFileName,O_RDONLY); // TODO: check the parameters
                     dup2(desIn, 0); // replace stdin(0) with desIn
                     close(desIn);
-                } // TODO: check the parameters
-                if(isOutRed){
+                }
+                if(index+1==cmdCnt && isOutRed){
                     desOut = open(outFileName, O_WRONLY | O_CREAT | O_TRUNC, S_IRWXU);
                     dup2(desOut, 1); // replace stdout(1) with desOut
                     close(desOut);
                 }
-                if(isOutApp){
+                if(index+1==cmdCnt && isOutApp){
                     desOut = open(outFileName, O_WRONLY | O_CREAT | O_APPEND, S_IRWXU);
                     dup2(desOut, 1);
                     close(desOut);
                 }
-                /**
-                 * execution     
-                 */
-
-                pid_t childPid;
-                int childStatus = 0;
-                if ((childPid = fork()) < 0){ // fork failed
-                    errMsg("Error: fork failed.\n");
-                    exit(0);
+                /* closing child pipeFd */
+                for(int i=0;i<2*pipeCnt;i++){
+                    close(pipeFd[i]);
                 }
-                else if (childPid == 0){ // executed by child process
-                    if (execvp(parm[0],parm) < 0){
-                        errMsg("Error: execvp not working.\n");
-                        exit(0);
-                    }
-                    else{
-                        exit(0);
-                    }
+                /* running bash command */
+                if(execvp(mArgv[cmdHead], mArgv+cmdHead) < 0){
+                    errMsg("Error: execvp not working.\n");
+                    // exit(0);
                 }
-                else{ // executed by parnet process
-                    /* wait for child process */
-                    pid_t tmpPid;
-                    do{
-                        tmpPid = wait(&childStatus);
-                        if(tmpPid != childPid){
-                            char tmpMsg[1024];
-                            sprintf(tmpMsg, "Error: The background process [%d] need to be terminated!\n", (int)tmpPid);
-                            errMsg(tmpMsg); // TODO: background process
-                        }
-                    } while (tmpPid != childPid);
-                }
-                char tmpMsg[108];
-                sprintf(tmpMsg,"Child process status: %d\n",childStatus);
-                debugMsg(tmpMsg);
+                exit(0); // TODO: necessary?
             }
-            /* pipe fork */
-            if(k<pipedCnt){
-                pid_t tmpPid = fork();
-                if(tmpPid==-1){
-                    errMsg("Error: fork failure.\n");
-                    exit(0);
-                }
-                else if(tmpPid==0){ // child reads from pipe; only the child will enter the loop
-                    close(pipeFd[1]); // child closes write
-                    while (read(pipeFd[0], &pipeBuf, 1) > 0) write(STDOUT_FILENO, &pipeBuf, 1);
-                    write(STDOUT_FILENO, "\n", 1);
-                    close(pipeFd[0]);
-                    // go on
-                }
-                else { // parent writes to pipe
-                    close(pipeFd[0]);
-                    write(pipeFd[1],"something",length("something"));
-                    close(pipeFd[1]); // reader sees EOF
-                    wait(NULL); // wait for child
-                    if(k<pipedCnt) exit(0);
-                    else if(k==pipedCnt) break;
-                }
+            else{ // parent process
+                
             }
-            /* releasing memory */
-            for(int i=0;i<parmCnt;i++) free(parm[i]);
-            free(parm);            
-            free(segLine);
         }
-        free(tmpLine);
+        for(int i=0;i<2*pipeCnt;i++){
+            close(pipeFd[i]); // parent closing pipes
+        }
+        for(int i=0;i<pipeCnt+1;i++){
+            wait(&childStatus); // parent waiting for child process
+            char tmpMsg[108];
+            sprintf(tmpMsg,"Child process status: %d\n",childStatus);
+            debugMsg(tmpMsg);
+            /* pid_t tmpPid;
+            do{
+                tmpPid = wait(&childStatus);
+                if(tmpPid != pid){
+                    char tmpMsg[1024];
+                    sprintf(tmpMsg, "Error: The background process [%d] need to be terminated!\n", (int)tmpPid);
+                    errMsg(tmpMsg); // background process
+                }
+            } while (tmpPid != pid); */
+        }
+
+        for(int i=0;i<mArgc;i++) if(mArgv[i]!=NULL) free(mArgv[i]);
+        free(mArgv);
+        free(sLine);
         promptExit();
     }
     return 0;

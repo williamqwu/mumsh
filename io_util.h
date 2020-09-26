@@ -4,6 +4,7 @@
 #define MAX_LINE 1030 // maxima size of a command line (1024)
 #define MAX_FILENAME 256 // maxima length of the file name (255)
 #define PARM_DELIM " \t\n" // delim used for input parsing
+#define MAX_PIPED 400 // maxima count of pipeline
 
 #include "mumsh.h"
 

@@ -7,6 +7,16 @@
 #define MAX_PIPED 400       // maxima count of pipeline
 #define MAX_PATH 1050       // maxima path length    
 
+/* special quoted characters */
+#define Q_NON_SPECIAL 0
+#define Q_GREATER 1         // >
+#define Q_SMALLER 2         // <
+#define Q_PIPE 3            // |
+#define Q_BLANK 4           // 
+#define Q_NEWLINE 5         // \n
+
+#define Q_REPLACER 20       // Device Control 4
+
 #include "mumsh.h"
 
 void prompt(const char *message);

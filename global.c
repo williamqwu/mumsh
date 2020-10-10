@@ -4,6 +4,9 @@ void promptInit(){
     inFileName = (char *)malloc(sizeof(char)*MAX_FILENAME);
     outFileName = (char *)malloc(sizeof(char)*MAX_FILENAME);
     line = (char *)malloc(sizeof(char)*MAX_LINE);
+    memset(line,0,MAX_LINE);
+    conjLine = (char *)malloc(sizeof(char)*MAX_LINE);
+    memset(conjLine,0,MAX_LINE);
     fdStdIn = dup(0);
     fdStdOut = dup(1);
 }

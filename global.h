@@ -9,6 +9,7 @@
 char *inFileName;   // input file name related with redirection
 char *outFileName;  // output file name related with redirection
 char *line;         // original input line
+char *conjLine;     // recombinant line
 int fdStdIn;        // file descriptor for stdin
 int fdStdOut;       // file descriptor for stdout
 

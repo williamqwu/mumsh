@@ -43,56 +43,149 @@ int main(){
         int pipedInitAddr[MAX_PIPED];
         memset(pipedInitAddr,0,MAX_PIPED);
         promptInit();
+
         /** Input
          * @line: original line of commands
+         * @conjLine: pre-processed line of commands
          */
-        if (fgets(line, MAX_LINE, stdin) == NULL){
-            free(line);
-            promptExit();
-            debugMsg("Info: fgets quit.\n");
-            if(feof(stdin)) continue;
-            if(errno == EINTR){
-                // do something
+        int isInputNotEnd = 0, isFirstfgets = 1;
+        int isSQuoNotClosed = 0, isDQuoNotClosed = 0;
+        while(isInputNotEnd || isFirstfgets){
+            isInputNotEnd = 0;
+            if(isFirstfgets) isFirstfgets = 0;
+            else prompt("> ");
+            if(fgets(line, MAX_LINE, stdin) == NULL){
+                free(line);
+                free(conjLine);
+                promptExit();
+                debugMsg("Info: fgets quit.\n");
+                if(feof(stdin)) continue;
+                if(errno == EINTR) continue; // fgets meet SIGINT
+                stdoutMsg("exit\n");
+                exit(0);
+            }
+            
+            /* check incomplete quotation mark and update the flag */
+            for(unsigned int i=0;i<strlen(line);i++){
+                if(line[i]=='\''){
+                    if(!isSQuoNotClosed && !isDQuoNotClosed) isSQuoNotClosed = 1;
+                    else if(isSQuoNotClosed) isSQuoNotClosed = 0;
+                }
+                else if(line[i]=='\"'){
+                    if(!isSQuoNotClosed && !isDQuoNotClosed) isDQuoNotClosed = 1;
+                    else if(isDQuoNotClosed && (i==0 || (i>0 && line[i-1]!='\\'))) isDQuoNotClosed = 0;
+                }
+            }
+            if(isSQuoNotClosed || isDQuoNotClosed){
+                strcat(conjLine, line);
+                isInputNotEnd = 1;
                 continue;
             }
-            stdoutMsg("exit\n");
-            exit(0);
-            // continue;
+            for(unsigned int i=strlen(line)-2;i>=0;i--){ // assume that the last character is newline
+                if(line[i]==' ') continue;
+                else if(line[i]=='>' || line[i]=='<' || line[i]=='|'){
+                    isInputNotEnd = 1;
+                    break;
+                }
+                else break;
+            }
+            if(isInputNotEnd){
+                line[strlen(line)-1] = ' '; // replace newline with blank
+                strcat(conjLine, line);
+                continue;
+            }
+            /* concatenation */
+            strcat(conjLine, line);
+            isInputNotEnd = 0; // break;
         }
+        free(line);
         fflush(stdin);
-        if(nodeStatus==PARENT_EXIT){
-            free(line);
+        if(nodeStatus==PARENT_EXIT){ // no longer necessary
+            free(conjLine);
             promptExit();
             continue;
         }
-        /** Parsing line
-         *
+
+        /** Parsing conjLine
+         * EFFECTS: validate whether the input is emtpy
          */
         int isEmptyLine=1;
-        for(unsigned int i=0;i<strlen(line);i++){
-            if(line[i]!=32 && line[i]!=10) isEmptyLine=0;
+        for(unsigned int i=0;i<strlen(conjLine);i++){
+            if(conjLine[i]!=32 && conjLine[i]!=10) isEmptyLine=0;
         }
         if(isEmptyLine){
             debugMsg("Empty line.\n");
-            free(line);
+            free(conjLine);
             promptExit();
             continue;
         }
+
+        /** Parsing quotation mark
+         * 
+         */
+        isSQuoNotClosed = 0;
+        isDQuoNotClosed = 0;
+        int specialCnt = 0;
+        char specialList[MAX_LINE];
+        memset(specialList,0,MAX_LINE);
+        unsigned int deleteCnt = 0;
+        unsigned int deleteList[MAX_LINE];
+        for(unsigned int i=0;i<strlen(conjLine)-1;i++){ // omitted the newline in the end
+            if(isSQuoNotClosed || isDQuoNotClosed){
+                if(conjLine[i]=='>') {conjLine[i]=Q_REPLACER;specialList[specialCnt++]='>';}
+                if(conjLine[i]=='<') {conjLine[i]=Q_REPLACER;specialList[specialCnt++]='<';}
+                if(conjLine[i]=='|') {conjLine[i]=Q_REPLACER;specialList[specialCnt++]='|';}
+                if(conjLine[i]==' ') {conjLine[i]=Q_REPLACER;specialList[specialCnt++]=' ';}
+                if(conjLine[i]=='\n') {conjLine[i]=Q_REPLACER;specialList[specialCnt++]='\n';}
+            }
+            if(conjLine[i]=='\''){
+                if(!isSQuoNotClosed && !isDQuoNotClosed){
+                    deleteList[deleteCnt++] = i; // DEL '
+                    isSQuoNotClosed = 1;
+                }
+                else if(isSQuoNotClosed){
+                    deleteList[deleteCnt++] = i; // DEL '
+                    isSQuoNotClosed = 0;
+                }
+            }
+            else if(conjLine[i]=='\"'){
+                if(!isSQuoNotClosed && !isDQuoNotClosed){
+                    deleteList[deleteCnt++] = i; // DEL "
+                    isDQuoNotClosed = 1;
+                }
+                else if(isDQuoNotClosed && i>0 && conjLine[i-1]=='\\'){
+                    deleteList[deleteCnt++] = i; // DEL slash
+                }
+                else if(isDQuoNotClosed && (i==0 || (i>0 && conjLine[i-1]!='\\'))){
+                    deleteList[deleteCnt++] = i; // DEL "
+                    isDQuoNotClosed = 0;
+                }
+            }
+        }
+        char tmpLine[MAX_LINE];
+        memset(tmpLine,0,MAX_LINE);
+        for(unsigned int i=0,j=0,k=0;i<strlen(conjLine);i++){
+            if(j>=deleteCnt || (j<deleteCnt && i!=deleteList[j])) tmpLine[k++]=conjLine[i];
+            else if(j<deleteCnt && i==deleteList[j]) j++;
+        }
+        memset(conjLine,0,MAX_LINE);
+        strcpy(conjLine,tmpLine);
         /** Parsing redirection
-         * @Sline: line with keywords >, <, >> separated by space
+         * @Sline: conjLine with keywords >, <, >> separated by space
          */
         char *sLine = (char *)malloc(sizeof(char)*MAX_LINE*2);
         memset(sLine,0,MAX_LINE*2);
-        for(unsigned int i=0,j=0;i<strlen(line);){
-            if(line[i]!='<' && line[i]!='>') sLine[j++]=line[i++];
+        for(unsigned int i=0,j=0;i<strlen(conjLine);){
+            if(conjLine[i]!='<' && conjLine[i]!='>' && conjLine[i]!='|') sLine[j++]=conjLine[i++];
             else{
                 sLine[j++]=' ';
-                sLine[j++]=line[i++];
-                if(i<strlen(line)&&line[i]=='>') sLine[j++]=line[i++];
-                if(i<strlen(line)&&line[i]!=' ') sLine[j++]=' ';
+                sLine[j++]=conjLine[i++];
+                if(i<strlen(conjLine)&&conjLine[i]=='>') sLine[j++]=conjLine[i++];
+                if(i<strlen(conjLine)&&conjLine[i]!=' ') sLine[j++]=' ';
             }
         }
-        free(line);
+        free(conjLine);
+
         // TODO: check whether there is only blank characters in the line (?)
         // TODO: check whether the pipe is valid, error handling here.
 
@@ -189,6 +282,16 @@ int main(){
         }
         int cmdCnt = pipeCnt + 1; // number of commands in the line
         cmdHeadDict[cmdCnt] = mArgc + 1; // for the purpose of calculating offset
+        
+        /** Recreating special characters
+         */ 
+        int spIndex = 0;
+        for(int i=0;i<mArgc;i++){
+            if(mArgv[i]==NULL) continue;
+            for(unsigned int j=0;j<strlen(mArgv[i]);j++){
+                if(mArgv[i][j] == Q_REPLACER && spIndex<specialCnt) mArgv[i][j] = specialList[spIndex++];
+            }
+        }
 
         /** Creating pipe
          * @pipeFd: file descriptor for read/write ends of pipes
@@ -200,6 +303,7 @@ int main(){
                 exit(0);
             }
         }
+
         /** Executing commands
          * @childStatus
          */

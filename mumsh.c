@@ -1,8 +1,40 @@
 #include "mumsh.h"
+// void cHandler(){
+//     // signal(SIGINT, cHandler);
+//     debugMsg("Info: sending Ctrl-C\n");
+//     if(nodeStatus == PARENT_NORMAL) {
+//         debugMsg("Info: Node Status-Parent Normal.\n");
+//         nodeStatus = PARENT_EXIT;
+//     }
+//     else if(nodeStatus == CHILD_NORMAL){
+//         debugMsg("Info: Node Status-Child Normal.\n");
+//         exit(0);
+//     }
+// }
+struct sigaction old_action;
+struct sigaction action;
+void sigint_handler()
+{
+    sigaction(SIGINT, &old_action, NULL);
+    debugMsg("Info: sending Ctrl-C\n");
+    if(nodeStatus == PARENT_NORMAL) {
+        debugMsg("Info: Node Status-Parent Normal.\n");
+        nodeStatus = PARENT_EXIT;
+    }
+    else if(nodeStatus == CHILD_NORMAL){
+        debugMsg("Info: Node Status-Child Normal.\n");
+        exit(0);
+    }
+}
 
 int main(){
+    // signal(SIGINT, cHandler);
+    action.sa_handler = &sigint_handler;
     while(1){
+        sigaction(SIGINT, &action, &old_action);
+        nodeStatus = PARENT_NORMAL;
         prompt("mumsh $ ");
+        
         /** Initialization
          * @isInRed, isOutRed, isOutApp: redirection status
          */
@@ -15,12 +47,23 @@ int main(){
          * @line: original line of commands
          */
         if (fgets(line, MAX_LINE, stdin) == NULL){
-            debugMsg("Info: fgets reaching EOF.\n");
-            stdoutMsg("exit\n");
             free(line);
             promptExit();
+            debugMsg("Info: fgets quit.\n");
+            if(feof(stdin)) continue;
+            if(errno == EINTR){
+                // do something
+                continue;
+            }
+            stdoutMsg("exit\n");
             exit(0);
             // continue;
+        }
+        fflush(stdin);
+        if(nodeStatus==PARENT_EXIT){
+            free(line);
+            promptExit();
+            continue;
         }
         /** Parsing line
          *
@@ -177,7 +220,8 @@ int main(){
             if(!strcmp(mArgv[cmdHead],"cd")){ // FIXME: pipe, location, syntax
                 // const char *dir = "~";
                 if(cmdOffset==1){
-                    if(chdir("/.") < 0){
+                    if(chdir("/.") < 0){ // TODO: "~" need to be replaced by a specific directory (related with the user) (also without any other parameters)
+                        // TODO: "cd -" need to be special judged (store the last result)
                         errMsg("Error: cd ~ not working.\n");
                     }
                 }
@@ -198,6 +242,7 @@ int main(){
                 exit(0);
             }
             else if (pid == 0){ // child process
+                nodeStatus = CHILD_NORMAL;
                 /* connecting child pipeFd */
                 if(index+1 < cmdCnt){ // not the last command
                     if(pipeCnt>0 && dup2(pipeFd[index*2+1], 1) < 0){
@@ -250,7 +295,8 @@ int main(){
                     errMsg("Error: execvp not working.\n");
                     // exit(0);
                 }
-                exit(0); // TODO: necessary?
+                // a successful call to execvp doesn't have a return value, so code after this line will not be reached.
+                exit(0);
             }
             else{ // parent process
                 

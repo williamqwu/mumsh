@@ -6,6 +6,7 @@
 #define PARM_DELIM " \t\n"  // delim used for input parsing
 #define MAX_PIPED 400       // maxima count of pipeline
 #define MAX_PATH 1050       // maxima path length    
+#define MAX_BGPROC 50       // maxima count of background process
 
 /* special quoted characters */
 #define Q_NON_SPECIAL 0
@@ -20,11 +21,8 @@
 #include "mumsh.h"
 
 void prompt(const char *message);
-
 void errMsg(const char *message);
-
 void stdoutMsg(const char *message);
-
 void debugMsg(const char *message);
 
 #endif // IO_UTIL_H

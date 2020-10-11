@@ -10,10 +10,17 @@ char *inFileName;   // input file name related with redirection
 char *outFileName;  // output file name related with redirection
 char *line;         // original input line
 char *conjLine;     // recombinant line
+char *bgCommand[MAX_BGPROC];    // background process command 
 int fdStdIn;        // file descriptor for stdin
 int fdStdOut;       // file descriptor for stdout
 
 int nodeStatus;     // current status
+
+#define PROC_DONE     1
+#define PROC_RUNNING  2
+int isBackground;   // background status
+int bgCnt;          // current working background process; NOTE: job ID starts from 1
+int bgJob[2*MAX_BGPROC]; // status Array
 
 void promptInit();
 void promptExit();

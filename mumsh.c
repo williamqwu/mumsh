@@ -30,6 +30,8 @@ void sigint_handler()
 int main(){
     // signal(SIGINT, cHandler);
     action.sa_handler = &sigint_handler;
+    bgCnt = 0;
+    for(int i=0;i<MAX_BGPROC;i++) bgCommand[i]=NULL;
     while(1){
         sigaction(SIGINT, &action, &old_action);
         nodeStatus = PARENT_NORMAL;
@@ -118,6 +120,16 @@ int main(){
             free(conjLine);
             promptExit();
             continue;
+        }
+
+        /** Parsing background character
+         */
+        if(conjLine[strlen(conjLine)-2] == '&'){
+            isBackground = 1;
+            bgCommand[bgCnt] = (char *)malloc(sizeof(char)*MAX_LINE);
+            memset(bgCommand[bgCnt],0,MAX_LINE);
+            strcpy(bgCommand[bgCnt], conjLine);
+            bgCommand[bgCnt][strlen(bgCommand[bgCnt])-1] = '\0';
         }
 
         /** Parsing quotation mark
@@ -279,6 +291,7 @@ int main(){
                 mArgv[i]=NULL;
                 cmdHeadDict[j++]=i+1;
             }
+            else if(!strcmp(mArgv[i], "&")) {free(mArgv[i]); mArgv[i]=NULL;}
         }
         int cmdCnt = pipeCnt + 1; // number of commands in the line
         cmdHeadDict[cmdCnt] = mArgc + 1; // for the purpose of calculating offset
@@ -338,8 +351,27 @@ int main(){
                 }
                 continue;
             }
+            if(!strcmp(mArgv[cmdHead],"jobs")){
+                // if(bgCnt==0)stdoutMsg("\n");
+                for(int i=0;i<bgCnt;i++){
+                    char tmpMsg[MAX_LINE];
+                    if(waitpid(bgJob[i*2],NULL,WNOHANG)==0) sprintf(tmpMsg,"[%d] running %s\n",i+1,bgCommand[i]);
+                    else sprintf(tmpMsg,"[%d] done %s\n",i+1,bgCommand[i]);
+                    stdoutMsg(tmpMsg);
+                }
+                continue;
+            }
+
             /* forking */
-            pid_t pid = fork();
+            pid_t pid = fork(); // TODO: check cd running in background
+            if(pid > 0 && isBackground==1 && index==0){
+                bgJob[bgCnt*2] = pid;
+                bgJob[bgCnt*2+1] = PROC_RUNNING;
+                bgCnt++;
+                char tmpMsg[MAX_LINE];
+                sprintf(tmpMsg,"[%d] %s\n",bgCnt,bgCommand[bgCnt-1]);
+                stdoutMsg(tmpMsg);
+            }
             
             if(pid < 0){ // fork error
                 errMsg("Error: fork failed.\n");
@@ -409,7 +441,8 @@ int main(){
         for(int i=0;i<2*pipeCnt;i++){
             close(pipeFd[i]); // parent closing pipes
         }
-        for(int i=0;i<pipeCnt+1;i++){
+        if(isBackground == 0){
+            for(int i=0;i<pipeCnt+1;i++){
             wait(&childStatus); // parent waiting for child process
             char tmpMsg[108];
             sprintf(tmpMsg,"Child process status: %d\n",childStatus);
@@ -423,12 +456,18 @@ int main(){
                     errMsg(tmpMsg); // background process
                 }
             } while (tmpPid != pid); */
+            }
         }
+        else{ // The process is running in the background
+            waitpid(bgJob[(bgCnt-1)*2],&childStatus,WNOHANG);
+        }
+        
 
         for(int i=0;i<mArgc;i++) if(mArgv[i]!=NULL) free(mArgv[i]);
         free(mArgv);
         free(sLine);
         promptExit();
     }
+    for(int i=0;i<bgCnt;i++) free(bgCommand[i]);
     return 0;
 }

@@ -7,6 +7,8 @@ void promptInit(){
     memset(line,0,MAX_LINE);
     conjLine = (char *)malloc(sizeof(char)*MAX_LINE);
     memset(conjLine,0,MAX_LINE);
+    
+    isBackground = 0;
     fdStdIn = dup(0);
     fdStdOut = dup(1);
 }
@@ -16,4 +18,5 @@ void promptExit(){
     dup2(fdStdOut, 1);
     free(inFileName);
     free(outFileName);
+    // free(bgCommand);
 }

@@ -19,6 +19,7 @@ void sigint_handler()
     debugMsg("Info: sending Ctrl-C\n");
     if(nodeStatus == PARENT_NORMAL) {
         debugMsg("Info: Node Status-Parent Normal.\n");
+        stdoutMsg("\n");
         nodeStatus = PARENT_EXIT;
     }
     else if(nodeStatus == CHILD_NORMAL){
@@ -64,13 +65,13 @@ int main(){
             if(isFirstfgets) isFirstfgets = 0;
             else prompt("> ");
             if(fgets(line, MAX_LINE, stdin) == NULL){
+                debugMsg("Info: fgets quit.\n");
+                // if(feof(stdin)) {fgetsErrorFlag=1; break;}
+                if(errno == EINTR) {errno=0; fgetsErrorFlag=1; break;} // fgets meet SIGINT
+                stdoutMsg("exit\n");
                 free(line);
                 free(conjLine);
                 promptExit();
-                debugMsg("Info: fgets quit.\n");
-                // if(feof(stdin)) {fgetsErrorFlag=1; break;}
-                if(errno == EINTR) {fgetsErrorFlag=1; break;}; // fgets meet SIGINT
-                stdoutMsg("exit\n");
                 for(int i=0;i<bgCnt;i++) free(bgCommand[i]);
                 if(lastDir!=NULL) free(lastDir);
                 free(lastPendingDir);
@@ -449,7 +450,7 @@ int main(){
                 exit(0);
             }
             /* checking build-in*/
-            if(!strcmp(mArgv[cmdHead],"cd")){ // FIXME: pipe
+            if(!strcmp(mArgv[cmdHead],"cd")){
                 fflush(NULL);
                 if(cmdOffset==1 || (cmdOffset==2 && !strcmp(mArgv[cmdHead+1],"~"))){
                     chdir(homedir);
@@ -462,7 +463,11 @@ int main(){
                         if(lastDir==NULL){
                             debugMsg("No last dir!\n");
                         }
-                        else chdir(lastDir);
+                        else{
+                            chdir(lastDir);
+                            stdoutMsg(lastDir);
+                            stdoutMsg("\n");
+                        }
                     }
                     else{
                         int cdStatus = chdir(mArgv[cmdHead+1]);
@@ -494,6 +499,7 @@ int main(){
 
             /* forking */
             pid_t pid = fork(); // TODO: check cd running in background
+            lastPid[index] = pid;
             if(pid > 0 && isBackground==1 && index==0){
                 bgJob[bgCnt*2] = pid;
                 bgJob[bgCnt*2+1] = PROC_RUNNING;
@@ -513,6 +519,7 @@ int main(){
                 exit(0);
             }
             else if (pid == 0){ // child process
+                sigaction(SIGINT, &action, &old_action);
                 nodeStatus = CHILD_NORMAL;
                 /* connecting child pipeFd */
                 if(index+1 < cmdCnt){ // not the last command
@@ -611,23 +618,25 @@ int main(){
             close(pipeFd[i]); // parent closing pipes
         }
         if(isBackground == 0){
-            for(int i=0;i<pipeCnt+1;i++){
-            wait(&childStatus); // parent waiting for child process
-            char tmpMsg[108];
-            sprintf(tmpMsg,"Child process status: %d\n",childStatus);
-            debugMsg(tmpMsg);
-            /* pid_t tmpPid;
-            do{
-                tmpPid = wait(&childStatus);
-                if(tmpPid != pid){
-                    char tmpMsg[1024];
-                    sprintf(tmpMsg, "Error: The background process [%d] need to be terminated!\n", (int)tmpPid);
-                    debugMsg(tmpMsg); // background process // errMsg
-                }
-            } while (tmpPid != pid); */
+            for(int i=0;i<pipeCnt+1;i++){ // parent waiting for child process
+                // wait(&childStatus);
+                // char tmpMsg[108];
+                // sprintf(tmpMsg,"Child process status: %d\n",childStatus);
+                // debugMsg(tmpMsg);
+                waitpid(lastPid[i],NULL,WUNTRACED);
+
+                /* pid_t tmpPid;
+                do{
+                    tmpPid = wait(&childStatus);
+                    if(tmpPid != pid){
+                        char tmpMsg[1024];
+                        sprintf(tmpMsg, "Error: The background process [%d] need to be terminated!\n", (int)tmpPid);
+                        debugMsg(tmpMsg); // background process // errMsg
+                    }
+                } while (tmpPid != pid); */
             }
         }
-        else{ // The process is running in the background
+        else if(isBackground == 1){ // The process is running in the background
             waitpid(bgJob[(bgCnt-1)*2],&childStatus,WNOHANG);
         }
         

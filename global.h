@@ -15,6 +15,7 @@ int fdStdIn;        // file descriptor for stdin
 int fdStdOut;       // file descriptor for stdout
 
 int nodeStatus;     // current status
+int lastPid[MAX_PIPED];
 
 char *lastDir;      // last directory
 char *lastPendingDir;   // last pending directory

@@ -1,16 +1,5 @@
 #include "mumsh.h"
-// void cHandler(){
-//     // signal(SIGINT, cHandler);
-//     debugMsg("Info: sending Ctrl-C\n");
-//     if(nodeStatus == PARENT_NORMAL) {
-//         debugMsg("Info: Node Status-Parent Normal.\n");
-//         nodeStatus = PARENT_EXIT;
-//     }
-//     else if(nodeStatus == CHILD_NORMAL){
-//         debugMsg("Info: Node Status-Child Normal.\n");
-//         exit(0);
-//     }
-// }
+
 struct sigaction old_action;
 struct sigaction action;
 void sigint_handler()
@@ -29,8 +18,9 @@ void sigint_handler()
 }
 
 int main(){
-    // signal(SIGINT, cHandler);
+    /* setting up signal handler*/
     action.sa_handler = &sigint_handler;
+    /* init */
     bgCnt = 0;
     for(int i=0;i<MAX_BGPROC;i++) bgCommand[i]=NULL;
     lastDir = NULL;
@@ -45,6 +35,7 @@ int main(){
         strcpy(lastPendingDir,tmpcwd);
     }
     else strcpy(lastPendingDir,homedir);
+    /* main loop begins */
     while(1){
         sigaction(SIGINT, &action, &old_action);
         nodeStatus = PARENT_NORMAL;
@@ -572,7 +563,6 @@ int main(){
                         if(errno==EPERM || errno==EROFS){ // not permitted
                             errMsg(outFileName);
                             errMsg(": Permission denied\n");
-                            // TODO
                             exit(0);
                         }
                     }
@@ -633,16 +623,6 @@ int main(){
                 // sprintf(tmpMsg,"Child process status: %d\n",childStatus);
                 // debugMsg(tmpMsg);
                 waitpid(lastPid[i],NULL,WUNTRACED);
-
-                /* pid_t tmpPid;
-                do{
-                    tmpPid = wait(&childStatus);
-                    if(tmpPid != pid){
-                        char tmpMsg[1024];
-                        sprintf(tmpMsg, "Error: The background process [%d] need to be terminated!\n", (int)tmpPid);
-                        debugMsg(tmpMsg); // background process // errMsg
-                    }
-                } while (tmpPid != pid); */
             }
         }
         else if(isBackground == 1){ // The process is running in the background

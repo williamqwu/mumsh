@@ -39,7 +39,12 @@ int main(){
     }
     lastPendingDir = (char *)malloc(sizeof(char)*MAX_PATH);
     memset(lastPendingDir,0,MAX_PATH);
-    // strcpy(lastPendingDir,homedir); // TODO: current directory
+    char tmpcwd[MAX_PATH];
+    if(getcwd(tmpcwd, sizeof(tmpcwd)) != NULL){
+        debugMsg("Info: pwd copying current directory.\n");
+        strcpy(lastPendingDir,tmpcwd);
+    }
+    else strcpy(lastPendingDir,homedir);
     while(1){
         sigaction(SIGINT, &action, &old_action);
         nodeStatus = PARENT_NORMAL;
@@ -459,7 +464,7 @@ int main(){
                     strcpy(lastPendingDir,homedir);
                 }
                 else{
-                    if(!strcmp(mArgv[cmdHead+1],"-")){ // FIXME: - (last two dir)
+                    if(!strcmp(mArgv[cmdHead+1],"-")){
                         if(lastDir==NULL){
                             debugMsg("No last dir!\n");
                         }
@@ -480,7 +485,11 @@ int main(){
                             if(lastDir==NULL) lastDir = (char *)malloc(sizeof(char)*MAX_PATH);
                             memset(lastDir,0,MAX_PATH);
                             strcpy(lastDir,lastPendingDir);
-                            strcpy(lastPendingDir,mArgv[cmdHead+1]);
+                            char cwd[MAX_PATH];
+                            if(getcwd(cwd, sizeof(cwd)) != NULL){
+                                debugMsg("Info: pwd copying absolute directory.\n");
+                            }
+                            strcpy(lastPendingDir,cwd);
                         }
                     }
                 }

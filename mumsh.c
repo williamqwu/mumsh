@@ -32,6 +32,13 @@ int main(){
     action.sa_handler = &sigint_handler;
     bgCnt = 0;
     for(int i=0;i<MAX_BGPROC;i++) bgCommand[i]=NULL;
+    lastDir = NULL;
+    if ((homedir = getenv("HOME")) == NULL) {
+        homedir = getpwuid(getuid())->pw_dir;
+    }
+    lastPendingDir = (char *)malloc(sizeof(char)*MAX_PATH);
+    memset(lastPendingDir,0,MAX_PATH);
+    // strcpy(lastPendingDir,homedir); // TODO: current directory
     while(1){
         sigaction(SIGINT, &action, &old_action);
         nodeStatus = PARENT_NORMAL;
@@ -45,7 +52,6 @@ int main(){
         int pipedInitAddr[MAX_PIPED];
         memset(pipedInitAddr,0,MAX_PIPED);
         promptInit();
-
         /** Input
          * @line: original line of commands
          * @conjLine: pre-processed line of commands
@@ -66,9 +72,10 @@ int main(){
                 if(errno == EINTR) {fgetsErrorFlag=1; break;}; // fgets meet SIGINT
                 stdoutMsg("exit\n");
                 for(int i=0;i<bgCnt;i++) free(bgCommand[i]);
+                if(lastDir!=NULL) free(lastDir);
+                free(lastPendingDir);
                 exit(0);
             }
-            
             /* check incomplete quotation mark and update the flag */
             for(unsigned int i=0;i<strlen(line);i++){
                 if(line[i]=='\''){
@@ -85,7 +92,7 @@ int main(){
                 isInputNotEnd = 1;
                 continue;
             }
-            for(unsigned int i=strlen(line)-2;i>=0;i--){ // assume that the last character is newline
+            if(strlen(line)>1) for(unsigned int i=strlen(line)-2;i>=0;i--){ // assume that the last character is newline
                 if(line[i]==' ') continue;
                 else if(line[i]=='>' || line[i]=='<' || line[i]=='|'){
                     isInputNotEnd = 1;
@@ -138,7 +145,7 @@ int main(){
             if(conjLine[i]!=32 && conjLine[i]!=10) isEmptyLine=0;
         }
         if(isEmptyLine){
-            debugMsg("Empty line.\n");
+            debugMsg("Info: Empty line.\n");
             free(conjLine);
             promptExit();
             continue;
@@ -415,8 +422,11 @@ int main(){
         for(int i=0;i<pipeCnt;i++){
             if(pipe(pipeFd + i*2) < 0){
                 debugMsg("Error: pipe failure.\n");
-                // TODO: CLOSING
+                for(int i=0;i<mArgc;i++) if(mArgv[i]!=NULL) free(mArgv[i]);
+                free(mArgv);
+                promptExit();
                 for(int i=0;i<bgCnt;i++) free(bgCommand[i]);
+                if(lastDir!=NULL) free(lastDir);
                 exit(0);
             }
         }
@@ -435,24 +445,39 @@ int main(){
                 free(mArgv);
                 promptExit();
                 for(int i=0;i<bgCnt;i++) free(bgCommand[i]);
+                if(lastDir!=NULL) free(lastDir);
                 exit(0);
             }
             /* checking build-in*/
-            if(!strcmp(mArgv[cmdHead],"cd")){ // FIXME: pipe, location, syntax
-                // const char *dir = "~";
-                if(cmdOffset==1){
-                    if(chdir("/.") < 0){ // TODO: "~" need to be replaced by a specific directory (related with the user) (also without any other parameters)
-                        // TODO: "cd -" need to be special judged (store the last result)
-                        debugMsg("Error: cd ~ not working.\n"); // errMsg
-                    }
+            if(!strcmp(mArgv[cmdHead],"cd")){ // FIXME: pipe
+                fflush(NULL);
+                if(cmdOffset==1 || (cmdOffset==2 && !strcmp(mArgv[cmdHead+1],"~"))){
+                    chdir(homedir);
+                    if(lastDir==NULL) lastDir = (char *)malloc(sizeof(char)*MAX_PATH);
+                    strcpy(lastDir,lastPendingDir);
+                    strcpy(lastPendingDir,homedir);
                 }
-                // TODO: cd non-existing error handling
                 else{
-                    // TO-CHECK: do we need to support arguments? more than one?
-                    if(chdir(mArgv[cmdHead+1]) < 0){
-                        debugMsg("Error: cd not working.\n"); // errMsg
+                    if(!strcmp(mArgv[cmdHead+1],"-")){ // FIXME: - (last two dir)
+                        if(lastDir==NULL){
+                            debugMsg("No last dir!\n");
+                        }
+                        else chdir(lastDir);
                     }
-                    // printf("%s\n",mArgv[cmdHead+1]);fflush(stdout);
+                    else{
+                        int cdStatus = chdir(mArgv[cmdHead+1]);
+                        if(cdStatus < 0){
+                            debugMsg("Error: cd not working.\n");
+                            errMsg(mArgv[cmdHead+1]);
+                            errMsg(": No such file or directory\n");
+                        }
+                        else{
+                            if(lastDir==NULL) lastDir = (char *)malloc(sizeof(char)*MAX_PATH);
+                            memset(lastDir,0,MAX_PATH);
+                            strcpy(lastDir,lastPendingDir);
+                            strcpy(lastPendingDir,mArgv[cmdHead+1]);
+                        }
+                    }
                 }
                 continue;
             }
@@ -480,8 +505,11 @@ int main(){
             
             if(pid < 0){ // fork error
                 debugMsg("Error: fork failed.\n");
-                // TODO: CLOSING
+                for(int i=0;i<mArgc;i++) if(mArgv[i]!=NULL) free(mArgv[i]);
+                free(mArgv);
+                promptExit();
                 for(int i=0;i<bgCnt;i++) free(bgCommand[i]);
+                if(lastDir!=NULL) free(lastDir);
                 exit(0);
             }
             else if (pid == 0){ // child process
@@ -490,16 +518,22 @@ int main(){
                 if(index+1 < cmdCnt){ // not the last command
                     if(pipeCnt>0 && dup2(pipeFd[index*2+1], 1) <= 0){
                         debugMsg("Error: dup2-stdout failure.\n");
-                        // TODO: CLOSING
+                        for(int i=0;i<mArgc;i++) if(mArgv[i]!=NULL) free(mArgv[i]);
+                        free(mArgv);
+                        promptExit();
                         for(int i=0;i<bgCnt;i++) free(bgCommand[i]);
+                        if(lastDir!=NULL) free(lastDir);
                         exit(0);
                     }
                 }
                 if(index!=0){ // not the first command
                     if(pipeCnt>0 && dup2(pipeFd[index*2-2], 0) < 0){
                         debugMsg("Error: dup2-stdin failure.\n");
-                        // TODO: CLOSING
+                        for(int i=0;i<mArgc;i++) if(mArgv[i]!=NULL) free(mArgv[i]);
+                        free(mArgv);
+                        promptExit();
                         for(int i=0;i<bgCnt;i++) free(bgCommand[i]);
+                        if(lastDir!=NULL) free(lastDir);
                         exit(0);
                     }
                 }
@@ -522,6 +556,7 @@ int main(){
                         if(errno==EPERM || errno==EROFS){ // not permitted
                             errMsg(outFileName);
                             errMsg(": Permission denied\n");
+                            // TODO
                             exit(0);
                         }
                     }
@@ -596,11 +631,11 @@ int main(){
             waitpid(bgJob[(bgCnt-1)*2],&childStatus,WNOHANG);
         }
         
-
         for(int i=0;i<mArgc;i++) if(mArgv[i]!=NULL) free(mArgv[i]);
         free(mArgv);
         promptExit();
     }
     for(int i=0;i<bgCnt;i++) free(bgCommand[i]);
+    if(lastDir!=NULL) free(lastDir);
     return 0;
 }

@@ -5,9 +5,8 @@ void promptInit(){
     outFileName = (char *)malloc(sizeof(char)*MAX_FILENAME);
     line = (char *)malloc(sizeof(char)*MAX_LINE);
     memset(line,0,MAX_LINE);
-    conjLine = (char *)malloc(sizeof(char)*MAX_LINE);
+    conjLine = (char *)malloc(sizeof(char)*MAX_LINE); // SF
     memset(conjLine,0,MAX_LINE);
-    
     isBackground = 0;
     fdStdIn = dup(0);
     fdStdOut = dup(1);

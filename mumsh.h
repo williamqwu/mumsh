@@ -11,6 +11,7 @@
 #include <sys/types.h>  // pid_t
 #include <sys/wait.h>   
 #include <sys/stat.h>
+#include <pwd.h>        // current directory
 
 #include "io_util.h"    // io-related functions
 #include "global.h"     // global variables

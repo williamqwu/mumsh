@@ -16,6 +16,10 @@ int fdStdOut;       // file descriptor for stdout
 
 int nodeStatus;     // current status
 
+char *lastDir;      // last directory
+char *lastPendingDir;   // last pending directory
+const char *homedir;
+
 #define PROC_DONE     1
 #define PROC_RUNNING  2
 int isBackground;   // background status

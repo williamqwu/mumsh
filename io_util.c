@@ -6,7 +6,6 @@ void prompt(const char *message){
 }
 
 void errMsg(const char *message){
-    // TODO: errorcode
     printf("%s", message);
     fflush(stdout);
 }

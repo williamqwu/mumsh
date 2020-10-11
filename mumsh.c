@@ -52,6 +52,7 @@ int main(){
          */
         int isInputNotEnd = 0, isFirstfgets = 1;
         int isSQuoNotClosed = 0, isDQuoNotClosed = 0;
+        int fgetsErrorFlag = 0;
         while(isInputNotEnd || isFirstfgets){
             isInputNotEnd = 0;
             if(isFirstfgets) isFirstfgets = 0;
@@ -61,9 +62,10 @@ int main(){
                 free(conjLine);
                 promptExit();
                 debugMsg("Info: fgets quit.\n");
-                if(feof(stdin)) continue;
-                if(errno == EINTR) continue; // fgets meet SIGINT
+                // if(feof(stdin)) {fgetsErrorFlag=1; break;}
+                if(errno == EINTR) {fgetsErrorFlag=1; break;}; // fgets meet SIGINT
                 stdoutMsg("exit\n");
+                for(int i=0;i<bgCnt;i++) free(bgCommand[i]);
                 exit(0);
             }
             
@@ -94,6 +96,26 @@ int main(){
             if(isInputNotEnd){
                 line[strlen(line)-1] = ' '; // replace newline with blank
                 strcat(conjLine, line);
+                /* check for syntax error */
+                for(unsigned int k=strlen(conjLine)-1;k>0;k--){
+                    int inBranch = 0;
+                    if(conjLine[k]=='>' || conjLine[k]=='<' || conjLine[k]=='|'){
+                        if(k<=0)break;
+                        inBranch = 1;
+                        char kk = conjLine[k];
+                        k--;
+                        if(k<=0)break;
+                        while(k>0 && (conjLine[k]==' ' || conjLine[k]=='\n')) k--;
+                        if(conjLine[k]=='>' || conjLine[k]=='<'){
+                            char tmpMsg[MAX_LINE];
+                            sprintf(tmpMsg,"syntax error near unexpected token `%c\'\n",kk);
+                            errMsg(tmpMsg);
+                            fgetsErrorFlag=1;
+                        }
+                    }
+                    if(inBranch) break;
+                }
+                if(fgetsErrorFlag) break;
                 continue;
             }
             /* concatenation */
@@ -101,12 +123,12 @@ int main(){
             isInputNotEnd = 0; // break;
         }
         free(line);
-        fflush(stdin);
-        if(nodeStatus==PARENT_EXIT){ // no longer necessary
+        if(fgetsErrorFlag==1 || nodeStatus==PARENT_EXIT){
             free(conjLine);
             promptExit();
             continue;
         }
+        fflush(stdin);
 
         /** Parsing conjLine
          * EFFECTS: validate whether the input is emtpy
@@ -124,7 +146,7 @@ int main(){
 
         /** Parsing background character
          */
-        if(conjLine[strlen(conjLine)-2] == '&'){
+        if(conjLine[strlen(conjLine)-2] == '&'){ // TODO: move downwards
             isBackground = 1;
             bgCommand[bgCnt] = (char *)malloc(sizeof(char)*MAX_LINE);
             memset(bgCommand[bgCnt],0,MAX_LINE);
@@ -197,10 +219,9 @@ int main(){
             }
         }
         free(conjLine);
-
-        // TODO: check whether there is only blank characters in the line (?)
-        // TODO: check whether the pipe is valid, error handling here.
-
+        char *dupsLine = (char *)malloc(sizeof(char)*MAX_LINE*2);
+        memset(dupsLine,0,MAX_LINE*2);
+        strcpy(dupsLine,sLine);
         /** Tokenize the line; parsing redirection symbols
          * @mArgv: arguments from the input line
          * @mArgc: argument count in the input line
@@ -210,10 +231,19 @@ int main(){
         int mArgc = 0; // argument count in the input line
         char *token;
         token = strtok(sLine, PARM_DELIM);
+        int ioErrorFlag = 0;
         while (token != NULL){
             // original redirection
             if (token[0]=='>'){
+                if(isOutApp==1 || isOutRed==1){
+                    if(!ioErrorFlag) errMsg("error: duplicated output redirection\n");
+                    ioErrorFlag = 1;
+                }
                 if(strlen(token)>1 && token[1]=='>'){
+                    if(strlen(token)>2 && token[2]=='>'){
+                        if(!ioErrorFlag) errMsg("syntax error near unexpected token `>\'\n");
+                        ioErrorFlag = 1;
+                    }
                     isOutApp=1;
                     if(strlen(token)==2){
                         token = strtok(NULL, PARM_DELIM);
@@ -249,6 +279,10 @@ int main(){
                 }
             }
             else if (token[0]=='<'){
+                if(isInRed==1){
+                    if(!ioErrorFlag) errMsg("error: duplicated input redirection\n");
+                    ioErrorFlag = 1;
+                }
                 isInRed=1;
                 if(strlen(token)==1){
                     token = strtok(NULL, PARM_DELIM); // TODO: Error: emtpy inFileName
@@ -272,9 +306,77 @@ int main(){
             mArgc++;
             token = strtok(NULL, PARM_DELIM);
         }
+        free(sLine);
         if(isInRed) debugMsg("inred\n");
         if(isOutApp) debugMsg("outapp\n");
         if(isOutRed) debugMsg("outred\n");
+
+        /* I/O error handling */
+        char **tmpArgv = (char **)malloc(sizeof(char *)*MAX_LINE); // arguments from the input line
+        for(int i=0;i<MAX_LINE;i++) tmpArgv[i]=NULL; // init the parameter array
+        int tmpArgc = 0; // argument count in the input line
+        char *tmpToken;
+        tmpToken = strtok(dupsLine, PARM_DELIM);
+        while (tmpToken != NULL){
+            tmpArgv[tmpArgc] = (char *)malloc(sizeof(char)*(strlen(tmpToken)+1));
+            memset(tmpArgv[tmpArgc], 0, strlen(tmpToken)+1); // init parameter
+            strcpy(tmpArgv[tmpArgc], tmpToken);
+            tmpArgc++;
+            tmpToken = strtok(NULL, PARM_DELIM);
+        }
+        int dupFlag=0;
+        if(!ioErrorFlag) for(int i=0;i<tmpArgc;i++){
+            if(tmpArgv[i][0]=='|') dupFlag=1;
+            if(tmpArgv[i][0]=='<' && dupFlag){
+                errMsg("error: duplicated input redirection\n");
+                ioErrorFlag = 1;
+                break;
+            }
+        }
+        dupFlag=0;
+        for(int i=0;i<tmpArgc;i++){
+            if(ioErrorFlag) break;
+            if(i==0 && tmpArgv[i][0]=='|'){
+                errMsg("error: missing program\n");
+                ioErrorFlag = 1;
+                break;
+            }
+            if(tmpArgv[i][0]=='|' && i<tmpArgc-1 && tmpArgv[i+1][0]=='|'){
+                errMsg("error: missing program\n");
+                ioErrorFlag = 1;
+                break;
+            }
+            if(tmpArgv[i][0]=='>' && i<tmpArgc-1 && tmpArgv[i+1][0]=='>'){
+                errMsg("syntax error near unexpected token `>\'\n");
+                ioErrorFlag = 1;
+                break;
+            }
+            if(tmpArgv[i][0]=='>' && i<tmpArgc-1 && tmpArgv[i+1][0]=='<'){
+                errMsg("syntax error near unexpected token `<\'\n");
+                ioErrorFlag = 1;
+                break;
+            }
+            if(tmpArgv[i][0]=='>' && i<tmpArgc-1 && tmpArgv[i+1][0]=='|'){
+                errMsg("syntax error near unexpected token `|\'\n");
+                ioErrorFlag = 1;
+                break;
+            }
+            if(tmpArgv[i][0]=='>') dupFlag=1;
+            if(tmpArgv[i][0]=='|' && dupFlag){
+                errMsg("error: duplicated output redirection\n");
+                ioErrorFlag = 1;
+                break;
+            }
+        }
+        for(int i=0;i<tmpArgc;i++) if(tmpArgv[i]!=NULL) free(tmpArgv[i]);
+        free(tmpArgv);
+        free(dupsLine);
+        if(ioErrorFlag){
+            for(int i=0;i<mArgc;i++) if(mArgv[i]!=NULL) free(mArgv[i]);
+            free(mArgv);
+            promptExit();
+            continue;
+        }
 
         /** Parsing pipe
          * @pipeCnt: number of pipes in the line
@@ -312,7 +414,9 @@ int main(){
         int pipeFd[pipeCnt*2+2]; // file descriptor for read/write ends of pipes
         for(int i=0;i<pipeCnt;i++){
             if(pipe(pipeFd + i*2) < 0){
-                errMsg("Error: pipe failure.\n");
+                debugMsg("Error: pipe failure.\n");
+                // TODO: CLOSING
+                for(int i=0;i<bgCnt;i++) free(bgCommand[i]);
                 exit(0);
             }
         }
@@ -329,8 +433,8 @@ int main(){
                 stdoutMsg("exit\n");
                 for(int i=0;i<mArgc;i++) if(mArgv[i]!=NULL) free(mArgv[i]);
                 free(mArgv);
-                free(sLine);
                 promptExit();
+                for(int i=0;i<bgCnt;i++) free(bgCommand[i]);
                 exit(0);
             }
             /* checking build-in*/
@@ -339,13 +443,14 @@ int main(){
                 if(cmdOffset==1){
                     if(chdir("/.") < 0){ // TODO: "~" need to be replaced by a specific directory (related with the user) (also without any other parameters)
                         // TODO: "cd -" need to be special judged (store the last result)
-                        errMsg("Error: cd ~ not working.\n");
+                        debugMsg("Error: cd ~ not working.\n"); // errMsg
                     }
                 }
+                // TODO: cd non-existing error handling
                 else{
                     // TO-CHECK: do we need to support arguments? more than one?
                     if(chdir(mArgv[cmdHead+1]) < 0){
-                        errMsg("Error: cd not working.\n");
+                        debugMsg("Error: cd not working.\n"); // errMsg
                     }
                     // printf("%s\n",mArgv[cmdHead+1]);fflush(stdout);
                 }
@@ -374,37 +479,64 @@ int main(){
             }
             
             if(pid < 0){ // fork error
-                errMsg("Error: fork failed.\n");
+                debugMsg("Error: fork failed.\n");
+                // TODO: CLOSING
+                for(int i=0;i<bgCnt;i++) free(bgCommand[i]);
                 exit(0);
             }
             else if (pid == 0){ // child process
                 nodeStatus = CHILD_NORMAL;
                 /* connecting child pipeFd */
                 if(index+1 < cmdCnt){ // not the last command
-                    if(pipeCnt>0 && dup2(pipeFd[index*2+1], 1) < 0){
-                        errMsg("Error: dup2-stdout failure.\n");
+                    if(pipeCnt>0 && dup2(pipeFd[index*2+1], 1) <= 0){
+                        debugMsg("Error: dup2-stdout failure.\n");
+                        // TODO: CLOSING
+                        for(int i=0;i<bgCnt;i++) free(bgCommand[i]);
                         exit(0);
                     }
                 }
                 if(index!=0){ // not the first command
                     if(pipeCnt>0 && dup2(pipeFd[index*2-2], 0) < 0){
-                        errMsg("Error: pip2-stdin failure.\n");
+                        debugMsg("Error: dup2-stdin failure.\n");
+                        // TODO: CLOSING
+                        for(int i=0;i<bgCnt;i++) free(bgCommand[i]);
                         exit(0);
                     }
                 }
                 /* checking redirection */
                 if(index==0 && isInRed){
                     desIn = open(inFileName,O_RDONLY); // TODO: check the parameters
+                    if(desIn<=0){
+                        if(errno == ENOENT){
+                            errMsg(inFileName);
+                            errMsg(": No such file or directory\n");
+                            exit(0);
+                        }
+                    }
                     dup2(desIn, 0); // replace stdin(0) with desIn
                     close(desIn);
                 }
                 if(index+1==cmdCnt && isOutRed){
                     desOut = open(outFileName, O_WRONLY | O_CREAT | O_TRUNC, S_IRWXU);
+                    if(desOut<=0){
+                        if(errno==EPERM || errno==EROFS){ // not permitted
+                            errMsg(outFileName);
+                            errMsg(": Permission denied\n");
+                            exit(0);
+                        }
+                    }
                     dup2(desOut, 1); // replace stdout(1) with desOut
                     close(desOut);
                 }
                 if(index+1==cmdCnt && isOutApp){
                     desOut = open(outFileName, O_WRONLY | O_CREAT | O_APPEND, S_IRWXU);
+                    if(desOut<=0){
+                        if(errno==EPERM || errno==EROFS){ // not permitted
+                            errMsg(outFileName);
+                            errMsg(": Permission denied\n");
+                            exit(0);
+                        }
+                    }
                     dup2(desOut, 1);
                     close(desOut);
                 }
@@ -421,14 +553,16 @@ int main(){
                         stdoutMsg("\n");
                     }
                     else{
-                        errMsg("Error: pwd not working.\n");
+                        debugMsg("Error: pwd not working.\n");
                     }
                     exit(0);
                 }
                 
                 /* running bash command */
                 if(execvp(mArgv[cmdHead], mArgv+cmdHead) < 0){
-                    errMsg("Error: execvp not working.\n");
+                    debugMsg("Error: execvp not working.\n");
+                    errMsg(mArgv[cmdHead]);
+                    errMsg(": command not found\n");
                     // exit(0);
                 }
                 // a successful call to execvp doesn't have a return value, so code after this line will not be reached.
@@ -453,7 +587,7 @@ int main(){
                 if(tmpPid != pid){
                     char tmpMsg[1024];
                     sprintf(tmpMsg, "Error: The background process [%d] need to be terminated!\n", (int)tmpPid);
-                    errMsg(tmpMsg); // background process
+                    debugMsg(tmpMsg); // background process // errMsg
                 }
             } while (tmpPid != pid); */
             }
@@ -465,7 +599,6 @@ int main(){
 
         for(int i=0;i<mArgc;i++) if(mArgv[i]!=NULL) free(mArgv[i]);
         free(mArgv);
-        free(sLine);
         promptExit();
     }
     for(int i=0;i<bgCnt;i++) free(bgCommand[i]);

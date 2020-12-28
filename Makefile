@@ -1,5 +1,5 @@
 CC = clang
-CFLAGS = -std=gnu11 -O2 -Wall -Wextra -Werror -pedantic -Wno-unused-result
+CFLAGS = -std=gnu11 -O2 -Wall -Wextra -pedantic -Wno-unused-result
 MUMSH_SRC = mumsh.c io_util.c global.c
 MUMSH_HEADER = mumsh.h io_util.h global.h
 TEST_SRC = mumsh.c io_util.c global.c

@@ -22,7 +22,8 @@
 | jobs    | 13      | display list of background tasks |
 
 ## Known issues
-1. for empty input filename, the error handler will fail
+1. for empty input filename, the error handler will fail.
+2. when choosing gnu11 to compile, a warning "implicitly declaring library function 'memset'" shows even if `string.h` is included.
 
 ## Notes
 I've attached a notebook `NOTES.md` that might be helpful to beginners that are interested in writing a customized shell program.

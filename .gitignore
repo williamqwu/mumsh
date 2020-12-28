@@ -1,3 +1,9 @@
-test*
+# enviornment
+.vscode/
+# build
+mumsh
+mumsh_memory_check
 *.tar
 *.zip
+# tester
+test*
